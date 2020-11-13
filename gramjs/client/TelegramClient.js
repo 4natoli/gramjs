@@ -180,13 +180,13 @@ class TelegramClient {
             // just stop even if we're connected. Do so every 30 minutes.
 
             // TODO Call getDifference instead since it's more relevant
-            if (new Date().getTime() - this._lastRequest > 30 * 60 * 1000) {
-                try {
-                    await this.invoke(new functions.updates.GetStateRequest())
-                } catch (e) {
-                    this._log.error('err is', e)
-                }
-            }
+            // if (new Date().getTime() - this._lastRequest > 30 * 60 * 1000) {
+            //     try {
+            //         await this.invoke(new functions.updates.GetStateRequest())
+            //     } catch (e) {
+            //         this._log.error('err is', e)
+            //     }
+            // }
         }
     }
 
