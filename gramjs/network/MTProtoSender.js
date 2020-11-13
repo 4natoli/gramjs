@@ -101,6 +101,7 @@ class MTProtoSender {
          * Note that here we're also storing their ``_RequestState``.
          */
         this._send_queue = new MessagePacker(this._state, this._log)
+        this._send_message_queue = new MessagePacker(this._state, this._log)
 
         /**
          * Sent states are remembered until a response is received.
@@ -202,7 +203,14 @@ class MTProtoSender {
 
         if (!Helpers.isArrayLike(request)) {
             const state = new RequestState(request)
-            this._send_queue.append(state)
+            this._log.info('>>>>> %s', request.constructor.name)
+            if (request.constructor.name === 'SendMessageRequest') {
+                this._log.info('Use _send_message_queue')
+                this._send_message_queue.append(state)
+            } else {
+                this._log.info('Use _send_queue')
+                this._send_queue.append(state)
+            }
             return state.promise
         } else {
             throw new Error('not supported')
@@ -245,6 +253,7 @@ class MTProtoSender {
 
         this._log.debug('Starting send loop')
         this._send_loop_handle = this._sendLoop()
+        this._send_message_loop_handle = this._sendMessageLoop()
 
         this._log.debug('Starting receive loop')
         this._recv_loop_handle = this._recvLoop()
@@ -288,6 +297,43 @@ class MTProtoSender {
             // This means that while it's not empty we can wait for
             // more messages to be added to the send queue.
             const res = await this._send_queue.get()
+            if (!res) {
+                continue
+            }
+            let data = res.data
+            const batch = res.batch
+            this._log.debug(`Encrypting ${batch.length} message(s) in ${data.length} bytes for sending`)
+
+            data = this._state.encryptMessageData(data)
+
+            try {
+                await this._connection.send(data)
+            } catch (e) {
+                console.log(e)
+                this._log.info('Connection closed while sending data')
+                return
+            }
+            for (const state of batch) {
+                this._pending_state[state.msgId] = state
+            }
+            this._log.debug('Encrypted messages put in a queue to be sent')
+        }
+    }
+
+    async _sendMessageLoop() {
+        while (this._user_connected && !this._reconnecting) {
+            if (this._pending_ack.size) {
+                const ack = new RequestState(new MsgsAck({ msgIds: Array(...this._pending_ack) }))
+                this._send_message_queue.append(ack)
+                this._last_acks.push(ack)
+                this._pending_ack.clear()
+            }
+            // this._log.debug('Waiting for messages to send...');
+            this._log.debug('Waiting for messages to send...')
+            // TODO Wait for the connection send queue to be empty?
+            // This means that while it's not empty we can wait for
+            // more messages to be added to the send queue.
+            const res = await this._send_message_queue.get()
             if (!res) {
                 continue
             }
