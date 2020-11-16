@@ -203,12 +203,9 @@ class MTProtoSender {
 
         if (!Helpers.isArrayLike(request)) {
             const state = new RequestState(request)
-            this._log.info('>>>>> %s', request.constructor.name)
             if (request.constructor.name === 'SendMessageRequest') {
-                this._log.info('Use _send_message_queue')
                 this._send_message_queue.append(state)
             } else {
-                this._log.info('Use _send_queue')
                 this._send_queue.append(state)
             }
             return state.promise
