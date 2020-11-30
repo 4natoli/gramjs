@@ -1,26 +1,39 @@
 const Socket = require('net').Socket
+const Mutex = require('async-mutex').Mutex
+const mutex = new Mutex()
 
 const closeError = new Error('NetSocket was closed')
 
 class PromisedNetSockets {
     constructor() {
         this.client = null
-
-
         this.closed = true
+    }
+
+    async readExactly(number) {
+        let readData = Buffer.alloc(0)
+        while (true) {
+            const thisTime = await this.read(number)
+            readData = Buffer.concat([readData, thisTime])
+            number = number - thisTime.length
+            if (!number) {
+                return readData
+            }
+        }
     }
 
     async read(number) {
         if (this.closed) {
-            console.log('couldn\'t read')
             throw closeError
         }
-        const canWe = await this.canRead
-
+        await this.canRead
+        if (this.closed) {
+            throw closeError
+        }
         const toReturn = this.stream.slice(0, number)
         this.stream = this.stream.slice(number)
         if (this.stream.length === 0) {
-            this.canRead = new Promise((resolve) => {
+            this.canRead = new Promise(resolve => {
                 this.resolveRead = resolve
             })
         }
@@ -34,7 +47,7 @@ class PromisedNetSockets {
         }
         const toReturn = this.stream
         this.stream = Buffer.alloc(0)
-        this.canRead = new Promise((resolve) => {
+        this.canRead = new Promise(resolve => {
             this.resolveRead = resolve
         })
         return toReturn
@@ -50,7 +63,7 @@ class PromisedNetSockets {
         this.stream = Buffer.alloc(0)
 
         this.client = new Socket()
-        this.canRead = new Promise((resolve) => {
+        this.canRead = new Promise(resolve => {
             this.resolveRead = resolve
         })
         this.closed = false
@@ -76,6 +89,8 @@ class PromisedNetSockets {
         this.client.write(data)
     }
 
+
+
     async close() {
         await this.client.destroy()
         this.client.unref()
@@ -83,12 +98,20 @@ class PromisedNetSockets {
     }
 
     async receive() {
-        this.client.on('data', async (message) => {
-            const data = Buffer.from(message)
-            this.stream = Buffer.concat([this.stream, data])
-            this.resolveRead(true)
+        this.client.on('data', async message => {
+
+            const release = await mutex.acquire()
+            try {
+                let data
+                //CONTEST BROWSER
+                this.stream = Buffer.concat([this.stream, message])
+                this.resolveRead(true)
+            } finally {
+                release()
+            }
         })
     }
 }
 
 module.exports = PromisedNetSockets
+
