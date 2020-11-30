@@ -1,6 +1,5 @@
 {
     "compilerOptions": {
-        // We don't care about this since Parcel runs Babel after TypeScript
         "module": "commonjs",
         "target": "es5",
         "lib": [
