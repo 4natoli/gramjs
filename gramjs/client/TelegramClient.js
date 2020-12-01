@@ -18,7 +18,7 @@ const { ConnectionTCPObfuscated } = require('../network/connection/TCPObfuscated
 const { BinaryWriter } = require('../extensions')
 const events = require('../events')
 
-const DEFAULT_DC_ID = 4
+const DEFAULT_DC_ID = 2
 const DEFAULT_IPV4_IP = '149.154.167.51'
 const DEFAULT_IPV6_IP = '[2001:67c:4e8:f002::a]'
 const DEFAULT_PORT = 443
