@@ -1,6 +1,7 @@
 const { sha1, readBufferFromBigInt, readBigIntFromBuffer } = require('../Helpers')
 const BinaryReader = require('../extensions/BinaryReader')
 const struct = require('python-struct')
+const { sleep } = require('../Helpers')
 
 class AuthKey {
     constructor(data) {
@@ -32,6 +33,12 @@ class AuthKey {
     }
 
     // TODO : This doesn't really fit here, it's only used in authentication
+
+    async waitForKey() {
+        while (!this.keyId) {
+            await sleep(20)
+        }
+    }
 
     /**
      * Calculates the new nonce hash based on the current class fields' values

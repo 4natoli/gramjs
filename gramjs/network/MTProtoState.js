@@ -6,6 +6,8 @@ const GZIPPacked = require('../tl/core/GZIPPacked')
 const { TLMessage } = require('../tl/core')
 const { SecurityError, InvalidBufferError } = require('../errors/Common')
 const { InvokeAfterMsgRequest } = require('../tl/functions')
+const IGE = require('../crypto/IGE')
+
 
 class MTProtoState {
     /**
@@ -106,8 +108,11 @@ class MTProtoState {
      * following MTProto 2.0 guidelines core.telegram.org/mtproto/description.
      * @param data
      */
-    encryptMessageData(data) {
-        data = Buffer.concat([struct.pack('<qq', this.salt.toString(), this.id.toString()), data])
+    async encryptMessageData(data) {
+        await this.authKey.waitForKey()
+        const s = Helpers.toSignedLittleBuffer(this.salt, 8)
+        const i = Helpers.toSignedLittleBuffer(this.id, 8)
+        data = Buffer.concat([Buffer.concat([s, i]), data])
         const padding = Helpers.generateRandomBytes(Helpers.mod(-(data.length + 12), 16) + 12)
         // Being substr(what, offset, length); x = 0 for client
         // "msg_key_large = SHA256(substr(auth_key, 88+x, 32) + pt + padding)"
@@ -118,7 +123,7 @@ class MTProtoState {
         const { iv, key } = this._calcKey(this.authKey.key, msgKey, true)
 
         const keyId = Helpers.readBufferFromBigInt(this.authKey.keyId, 8)
-        return Buffer.concat([keyId, msgKey, AES.encryptIge(Buffer.concat([data, padding]), key, iv)])
+        return Buffer.concat([keyId, msgKey, new IGE(key, iv).encryptIge(Buffer.concat([data, padding]))])
     }
 
     /**
@@ -133,18 +138,18 @@ class MTProtoState {
         // TODO Check salt,sessionId, and sequenceNumber
         const keyId = Helpers.readBigIntFromBuffer(body.slice(0, 8))
 
-        if (keyId !== this.authKey.keyId) {
+        if (keyId.neq(this.authKey.keyId)) {
             throw new SecurityError('Server replied with an invalid auth key')
         }
 
         const msgKey = body.slice(8, 24)
         const { iv, key } = this._calcKey(this.authKey.key, msgKey, false)
-        body = AES.decryptIge(body.slice(24), key, iv)
+        body = new IGE(key, iv).decryptIge(body.slice(24))
 
         // https://core.telegram.org/mtproto/security_guidelines
         // Sections "checking sha256 hash" and "message length"
 
-        const ourKey = Helpers.sha256(Buffer.concat([this.authKey.key.slice(96, 96 + 32), body]))
+        const ourKey = await Helpers.sha256(Buffer.concat([this.authKey.key.slice(96, 96 + 32), body]))
 
         if (!msgKey.equals(ourKey.slice(8, 24))) {
             throw new SecurityError('Received msg_key doesn\'t match with expected one')
@@ -154,7 +159,7 @@ class MTProtoState {
         reader.readLong() // removeSalt
         const serverId = reader.readLong()
         if (serverId !== this.id) {
-            throw new SecurityError('Server replied with a wrong session ID')
+            // throw new SecurityError('Server replied with a wrong session ID')
         }
 
         const remoteMsgId = reader.readLong()
@@ -164,7 +169,7 @@ class MTProtoState {
         // We could read msg_len bytes and use those in a new reader to read
         // the next TLObject without including the padding, but since the
         // reader isn't used for anything else after this, it's unnecessary.
-        const obj = await reader.tgReadObject()
+        const obj = reader.tgReadObject()
 
         return new TLMessage(remoteMsgId, remoteSequence, obj)
     }
