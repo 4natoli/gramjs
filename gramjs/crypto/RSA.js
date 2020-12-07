@@ -12,7 +12,8 @@ const _serverKeys = {}
 function getByteArray(integer, signed = false) {
     const { length: bits } = integer.toString(2)
     const byteLength = Math.floor((bits + 8 - 1) / 8)
-    return readBufferFromBigInt(BigInt(integer), byteLength, false, signed)
+    // const bi = BigInt(integer)
+    return readBufferFromBigInt(integer, byteLength, false, signed)
 }
 
 function _computeFingerprint(key) {

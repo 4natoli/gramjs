@@ -31,7 +31,7 @@
     "big-integer": "^1.6.48",
     "chalk": "^2.4.2",
     "crc": "^3.8.0",
-    "cryptography": "^1.2.3",
+    "@cryptography/aes": "^0.1.1",
     "csv-parse": "^4.4.6",
     "fast-csv": "^3.4.0",
     "glob": "^7.1.4",
